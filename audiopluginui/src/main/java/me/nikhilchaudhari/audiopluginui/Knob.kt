@@ -1,22 +1,16 @@
 package me.nikhilchaudhari.audiopluginui
 
-import android.R.attr.strokeWidth
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -26,20 +20,41 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.center
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import me.nikhilchaudhari.audiopluginui.commons.ValueTextBox
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.rem
 
 
+/**
+ * This is a parameter knob that can be used to control a parameter.
+ * It is a simple knob that can be dragged to change the value.
+ * The design is more like a classic knob with ticks around and a value text box at the bottom.
+ * It has a marker/indicator at the center of the knob that points where the knob is at.
+ * For usage please check [ParameterKnobPreview]
+ *
+ *
+ * @param value The initial value of the knob. No need to pass as state value.
+ * @param onValueChange The callback that is called when the value is changed.
+ * @param modifier The [Modifier] to be applied to the knob.
+ * @param minValue The minimum value of the knob.
+ * @param maxValue The maximum value of the knob.
+ * @param steps The number of steps to use for the knob.
+ * @param knobColor The [Color] of the knob.
+ * @param markerColor The [Color] of the marker.
+ * @param ticksColor The [Color] of the ticks.
+ */
 @Composable
-fun Knob(
+fun ParameterKnob(
     value: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
@@ -60,29 +75,30 @@ fun Knob(
 
         Canvas(
             modifier = modifier.then(
-                Modifier.pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = {
-                            showValueTextBox = true
-                        },
-                        onDrag = { change, dragAmount ->
-                            val combinedDrag = dragAmount.x + dragAmount.y
-                            val rawValue =
-                                (knobValue + combinedDrag / 1000f).coerceIn(minValue, maxValue)
-                            val steppedValue = if (steps > 0) {
-                                val stepSize = (maxValue - minValue) / steps
-                                ((rawValue - minValue) / stepSize).roundToInt() * stepSize + minValue
-                            } else {
-                                rawValue
+                Modifier
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = {
+                                showValueTextBox = true
+                            },
+                            onDrag = { change, dragAmount ->
+                                val combinedDrag = dragAmount.x + dragAmount.y
+                                val rawValue =
+                                    (knobValue + combinedDrag / 1000f).coerceIn(minValue, maxValue)
+                                val steppedValue = if (steps > 0) {
+                                    val stepSize = (maxValue - minValue) / steps
+                                    ((rawValue - minValue) / stepSize).roundToInt() * stepSize + minValue
+                                } else {
+                                    rawValue
+                                }
+                                knobValue = (steppedValue * 100f).roundToInt() / 100f
+                                onValueChange(steppedValue)
+                            },
+                            onDragEnd = {
+                                showValueTextBox = false
                             }
-                            knobValue = (steppedValue * 100f).roundToInt() / 100f
-                            onValueChange(steppedValue)
-                        },
-                        onDragEnd = {
-                            showValueTextBox = false
-                        }
-                    )
-                }
+                        )
+                    }
                     .padding(start = 12.dp, end = 12.dp, top = 12.dp)
             )
         ) {
@@ -152,37 +168,13 @@ fun Knob(
             ValueTextBox(value = knobValue)
         }
     }
-
-
-}
-
-
-@Composable
-fun ValueTextBox(
-    value: Float,
-    modifier: Modifier = Modifier,
-    textColor: Color = Color.White,
-    backgroundColor: Color = Color.Black
-) {
-    Box(
-        modifier = Modifier
-            .background(color = backgroundColor, shape = RoundedCornerShape(4.dp))
-            .border(0.5.dp, color = textColor, shape = RoundedCornerShape(4.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = value.toString(),
-            color = textColor,
-            modifier = modifier.padding(4.dp)
-        )
-    }
 }
 
 
 @Preview
 @Composable
-private fun KnobPreview() {
-    Knob(
+private fun ParameterKnobPreview() {
+    ParameterKnob(
         value = 0.0f,
         onValueChange = {},
         modifier = Modifier.size(100.dp),
@@ -191,5 +183,93 @@ private fun KnobPreview() {
         steps = 100,
         knobColor = Color.Magenta,
         markerColor = Color.White
+    )
+}
+
+
+/**
+ * This is a gauge knob that can be used to control a parameter.
+ * It is a simple knob that can be dragged to change the value.
+ * The design is sort of level indicator that fills the knob as the knob is dragged.
+ * Please check [GaugeKnobPreview] for usage.
+ *
+ * @param value The initial value of the knob. No need to pass as state value.
+ * @param onValueChange The callback that is called when the value is changed.
+ * @param modifier The [Modifier] to be applied to the knob.
+ * @param minValue The minimum value of the knob.
+ * @param maxValue The maximum value of the knob.
+ * @param knobColors The [List] of [Color]s to use for the knob track/level as gradient.
+ */
+@Composable
+fun GaugeKnob(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    minValue: Float = 0f,
+    maxValue: Float = 1f,
+    knobColors: List<Color> = listOf(Color.Red, Color.Yellow)
+) {
+    var knobValue by remember { mutableFloatStateOf(value) }
+    Box(
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = modifier.then(
+                Modifier
+                    .padding(start = 12.dp, end = 12.dp, top = 12.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDrag = { change, dragAmount ->
+                                val combinedDrag = dragAmount.x + dragAmount.y
+                                knobValue = (knobValue + combinedDrag / 1000f).coerceIn(minValue, maxValue)
+                                onValueChange(knobValue)
+                            }
+                        )
+                    }
+            )
+        ) {
+            val startAngle = 2 * Math.PI / 3
+            val endAngle = startAngle + ((2 * Math.PI) - Math.PI / 3)
+            val currentAngle = startAngle + (endAngle - startAngle) * knobValue
+
+            drawPath(
+                path = Path().apply {
+                    val center = size.center
+                    val radius = size.minDimension / 2 * 0.8f
+
+                    moveTo(
+                        x = center.x + radius * cos(startAngle.toFloat()),
+                        y = center.y + radius * sin(startAngle.toFloat())
+                    )
+
+                    arcTo(
+                        rect = androidx.compose.ui.geometry.Rect(
+                            left = center.x - radius,
+                            top = center.y - radius,
+                            right = center.x + radius,
+                            bottom = center.y + radius
+                        ),
+                        startAngleDegrees = Math.toDegrees(startAngle).toFloat(),
+                        sweepAngleDegrees = Math.toDegrees(currentAngle - startAngle).toFloat(),
+                        forceMoveTo = false
+                    )
+                },
+                brush = Brush.linearGradient(knobColors),
+                style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+fun GaugeKnobPreview() {
+    GaugeKnob(
+        value = 0.5f,
+        onValueChange = {},
+        modifier = Modifier.size(100.dp),
+        minValue = 0f,
+        maxValue = 1f,
+        knobColors = listOf(Color.Red, Color.Blue)
     )
 }
